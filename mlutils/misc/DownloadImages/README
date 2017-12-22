@@ -1,0 +1,12 @@
+USAGE:
+
+1. Open a chrome browser and use google image search to get images of choice
+2. Open a console by typing Ctrl-shift-i and clicking Console
+3. Scroll down in the images until the point where you want to stop downloading
+4. Copy the contents of js_console.js into the console and press enter.
+   This will create a list of urls called urls.txt in the chrome default downloads
+   directory.
+5. Run the download_images.py file by typing
+   >>>python download_images.py
+   in the console. Navigate to the urls.txt and click on it. This will download
+   those files into images in a folder called urls in the same directory as the urls.txt file.
