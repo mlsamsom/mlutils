@@ -97,28 +97,50 @@ namespace transdet
 
     int xrange = binImg1.cols;
     int yrange = binImg1.rows;
+    double total = 0.0;
+    // TODO optimize loop
     // TODO batch the rows into chars or something to speed up bitwise operation
+    // TODO or change the implementation to use a border of radius and opencv bitwise_xor
     for (int row; row < yrange; row++)
       {
         for (int col; col < xrange; col++)
           {
             // bitwise hamming distance
+            rhscol = col + xShift;
+            if (rhscol > xrange) {
+              rhscol = xrange - xShift;
+            }
+            rhsrow = row + yShift;
+            if (rhsrow > yrange) {
+              rhsrow = yrange - yShift;
+            }
+
+            if (binImg1[row][col] ^ binImg2[rhsrow][rhscol]) { total += 1.0; }
           }
       }
-
+    dist = total / ( (double)xrange * (double)yrange );
     return dist;
   }
+
+  //------------------------------------------------------------------------------------
+
+  double _hausdorffDist(cv::Mat &binImg1, cv::Mat &binImg2, int &xShift, int &yShift)
+  {
+    cout << "[ERROR] _hausdorffDist not implemented" << endl;
+    return -1.0;
+  }
+
+  //------------------------------------------------------------------------------------
 
   // MAIN FUNCTIONS
   //------------------------------------------------------------------------------------
 
-  std::vector<cv::Point> globalEdgeMotion(const cv::Mat &canny1,
-                                          const cv::Mat &canny2,
-                                          const int &radius)
+  cv::Point globalEdgeMotion(const cv::Mat &canny1, const cv::Mat &canny2, const int &radius)
   {
     std::vector<double> distances;
     std::vector<cv::Point> displacements;
 
+    // get hamming distances
     for (int dx = -radius; dx <= radius; dx++)
       {
         for (int dy = -radius; dy <= radius; dy++)
@@ -129,6 +151,11 @@ namespace transdet
             displacements.push_back(cv::Point(dx, dy))
           }
       }
+
+    // get smallest displacement
+    std::vector<double>::iterator result = std::min_element(std::begin(distances), std::end(distances));
+    int idx = std::distance(std::begin(distances), result);
+    return displacements[idx];
   }
 
   //------------------------------------------------------------------------------------
@@ -155,6 +182,7 @@ namespace transdet
         _customCanny(grayNext, cannyNext);
 
         // calculate global edge motion between cannyNow and cannyNext
+        cv::Point motion = globalEdgeMotion(cannyNow, cannyNext);
 
         // compute the percent difference
 

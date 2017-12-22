@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include <opencv2/opencv.hpp>
 
 namespace transdet
@@ -86,9 +87,9 @@ namespace transdet
    * @returns a vector of the motion required to minimize the edge
               distances between canny1 and canny2
    */
-  std::vector<cv::Point> globalEdgeMotion(const cv::Mat &canny1,
-                                          const cv::Mat &canny2,
-                                          const int &radius)
+  cv::Point globalEdgeMotion(const cv::Mat &canny1,
+                             const cv::Mat &canny2,
+                             const int &radius)
 
   //------------------------------------------------------------------------------------
 
