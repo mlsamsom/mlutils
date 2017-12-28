@@ -113,6 +113,18 @@ def hdfsEncodeBatch(parentDir, output):
     return summary
 
 
+class HDF5EncoderBase(object):
+    """Base encoder for hdf5 data
+
+    The transform method must be overridden for your own datasets
+    """
+    def __init__(self, dims):
+        self.dims = dims
+
+    def transform(self):
+        pass
+
+
 if __name__ == '__main__':
     import argparse
     from argparse import ArgumentParser
