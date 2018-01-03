@@ -12,6 +12,13 @@ namespace transdet
   //------------------------------------------------------------------------------------
 
   /*
+   * Roll a matrix over by axis
+   * TODO move this into a more global utilities header
+   */
+  void roll(cv::Mat &m, const int &shift, const int &axis);
+  //------------------------------------------------------------------------------------
+
+  /*
    * Compute the median value of a matrix
    *
    * @param input an input image

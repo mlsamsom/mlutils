@@ -7,6 +7,7 @@ import base64
 import json
 
 
+# encoding functions are taken from the imutils library by Adrian Rosebrock
 def base64_encode_array(inArray):
     """Return base64 encoded array
 
@@ -107,19 +108,56 @@ def hdfsEncodeBatch(parentDir, output):
             imagePath = os.path.join(labelPath, imageName)
             imageID = str(uuid.uuid4())
             image = base64_encode_image(imread(imagePath))
-            f.write('{}\t{}\t{}\t{}\n'.format(imageID, label, imagePath, image))
+            f.write('{}\t{}\t{}\t{}\n'.format(
+                imageID, label, imagePath, image))
         summary[label] = i
     f.close()
     return summary
 
 
-class HDF5EncoderBase(object):
+class HDF5IndexerBase(object):
     """Base encoder for hdf5 data
 
     The transform method must be overridden for your own datasets
     """
-    def __init__(self, dims):
+    def __init__(self, dims, dbPath, estNumEntries=500, maxBufferSize=50000,
+                 resizeFactor=2, verbose=True):
+        """Constructor for base hdf indexer
+
+        Args:
+            dims (tuple): dimension of the image you want saved
+            dbPath (str): path to database
+            estNumEntries (int): number of entries
+            maxBufferSize (int): maximum size of buffer before write
+            resizeFactor (int): 
+            verbose (bool)
+        """
         self.dims = dims
+        self.dbPath = dbPath
+        self.estNumEntries = estNumEntries
+        self.maxBufferSize = maxBufferSize
+        self.resizeFactor = resizeFactor
+        self.verbose = verbose
+
+        self.idxs = {}
+
+    def _writeBuffers(self):
+        pass
+
+    def _writeBuffer(self, dataset, datasetName, buf, idxName, sparse=False):
+        """Dump a partial numpy array or list to file
+
+        Args:
+            dataset
+        """
+        # compute end index
+        if type(buf) is list:
+            end = self.idxs[idxName] + len(buf)
+        else:
+            end = self.idxs[idxName] + buf.shape[0]
+
+    def _resizeDataset(self):
+        pass
 
     def transform(self):
         pass
@@ -128,6 +166,8 @@ class HDF5EncoderBase(object):
 if __name__ == '__main__':
     import argparse
     from argparse import ArgumentParser
+
+    print('Running test')
 
     default_path = '/Users/mike/Documents/recognition_data'
     default_output = '/Users/mike/GitRepos/mlutils/data/recognition.txt'

@@ -153,7 +153,8 @@ namespace transdet
       }
 
     // get smallest displacement
-    std::vector<double>::iterator result = std::min_element(std::begin(distances), std::end(distances));
+    std::vector<double>::iterator result = std::min_element(std::begin(distances),
+                                                            std::end(distances));
     int idx = std::distance(std::begin(distances), result);
     return displacements[idx];
   }
@@ -185,6 +186,7 @@ namespace transdet
         cv::Point motion = globalEdgeMotion(cannyNow, cannyNext);
 
         // compute the percent difference
+        // TODO roll the image in both axes by the motion
 
         // if the difference is over the threshold we found a scene transition
       }
