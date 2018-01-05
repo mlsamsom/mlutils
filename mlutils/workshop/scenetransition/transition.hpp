@@ -16,11 +16,15 @@ namespace transdet
    * Roll an OpenCV matrix over by axis
    *
    * TODO move this into a more global utilities header
-   * @param &m an opencv image matrix
+   * @param &src an opencv image matrix
+   * @param &dst an opencv image matrix
    * @param &shift the amount of pixels to shift by
    * @param &axis the axis in which to perform shift (0 or 1)
    */
-  void rollCvMat(cv::Mat &m, const int &shift, const int &axis);
+  void rollCvMat(const cv::Mat &src,
+                 cv::Mat &dst,
+                 const int &xShift,
+                 const int &yShift);
   //------------------------------------------------------------------------------------
 
   /*
@@ -30,7 +34,7 @@ namespace transdet
    * @param nVals number of bins for the histogram
    * @returns median of a matrix
    */
-  double _medianMat(cv::Mat &input, int &nVals);
+  double _medianMat(const cv::Mat &input, const int &nVals);
 
   //------------------------------------------------------------------------------------
 
@@ -51,7 +55,6 @@ namespace transdet
   /*
    * Custom canny threshold detector
    * uses a median method to calculate the low and high threshold
-   * using a pass by reference to conform to the OpenCV style
    *
    * @param &src grayscale image
    * @param &dst empty Mat
@@ -69,7 +72,10 @@ namespace transdet
    * @param &yShift the radius shift in the y direction
    * @returns the hamming distance
    */
-  double _hammingDist(cv::Mat &binImg1, cv::Mat &binImg2, int &xShift, int &yShift);
+  double _hammingDist(const cv::Mat &binImg1,
+                      const cv::Mat &binImg2,
+                      const int &xShift,
+                      const int &yShift);
 
   //------------------------------------------------------------------------------------
 
@@ -101,7 +107,7 @@ namespace transdet
    */
   cv::Point globalEdgeMotion(const cv::Mat &canny1,
                              const cv::Mat &canny2,
-                             const int &radius)
+                             const int &radius);
 
   //------------------------------------------------------------------------------------
 

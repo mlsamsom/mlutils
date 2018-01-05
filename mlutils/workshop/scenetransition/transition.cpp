@@ -3,6 +3,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <stdexcept>
 
 using namespace cv;
 using namespace std;
@@ -13,7 +14,7 @@ namespace transdet
   // HELPERS
   //------------------------------------------------------------------------------------
 
-  double _medianMat(cv::Mat &input, int &nVals)
+  double _medianMat(const cv::Mat &input, const int &nVals)
   {
     // compute histogram
     float range[] = { 0, (float)nVals };
@@ -74,10 +75,10 @@ namespace transdet
   {
     // find thresholds
     double median = _medianMat(src, 2^8);
-    double sigma 0.33;
+    double sigma = 0.33;
 
-    int lowThresh = (int)std::max(0, (1.0 - sigma) * median);
-    int highThresh = (int)std::min(0, (1.0 - sigma) * median);
+    int lowThresh = (int)std::max(0.0, (1.0 - sigma) * median);
+    int highThresh = (int)std::min(0.0, (1.0 - sigma) * median);
 
     // compute canny
     Canny(src, dst, lowThresh, highThresh, 4);
@@ -85,7 +86,10 @@ namespace transdet
 
   //------------------------------------------------------------------------------------
 
-  double _hammingDist(cv::Mat &binImg1, cv::Mat &binImg2, int &xShift, int &yShift)
+  double _hammingDist(const cv::Mat &binImg1,
+                      const cv::Mat &binImg2,
+                      const int &xShift,
+                      const int &yShift)
   {
     double dist = -1.0;
     // loop through the matrix, calculate the mate and then distance
@@ -101,21 +105,30 @@ namespace transdet
     // TODO optimize loop
     // TODO batch the rows into chars or something to speed up bitwise operation
     // TODO or change the implementation to use a border of radius and opencv bitwise_xor
+    uint8_t* pixelPtr1 = (uint8_t*)binImg1.data;
+    uint8_t* pixelPtr2 = (uint8_t*)binImg2.data;
     for (int row; row < yrange; row++)
       {
         for (int col; col < xrange; col++)
           {
             // bitwise hamming distance
-            rhscol = col + xShift;
+            int rhscol;
             if (rhscol > xrange) {
               rhscol = xrange - xShift;
-            }
-            rhsrow = row + yShift;
-            if (rhsrow > yrange) {
-              rhsrow = yrange - yShift;
+            } else {
+              rhscol = col + xShift;
             }
 
-            if (binImg1[row][col] ^ binImg2[rhsrow][rhscol]) { total += 1.0; }
+            int rhsrow;
+            if (rhsrow > yrange) {
+              rhsrow = yrange - yShift;
+            } else {
+              rhsrow = row + yShift;
+            }
+
+            uint8_t bin1Pix = pixelPtr1[row*xrange + col];
+            uint8_t bin2Pix = pixelPtr2[rhsrow*xrange + rhscol];
+            if (bin1Pix ^ bin2Pix) { total += 1.0; }
           }
       }
     dist = total / ( (double)xrange * (double)yrange );
@@ -134,12 +147,41 @@ namespace transdet
 
   // MAIN FUNCTIONS
   //------------------------------------------------------------------------------------
-  void rollCvMat(cv::Mat &m, const int &shift, const int &axis)
+  void rollCvMat(const cv::Mat &src,
+                 cv::Mat &dst,
+                 const int &xShift,
+                 const int &yShift)
   {
-    // re-implement numpy roll function
+    // TODO this needs to be optimized
+
+    if (xShift < 0 || xShift > src.cols) {
+      throw std::invalid_argument("Recieved an invalid xShift");
+    }
+
+    if (yShift < 0 || yShift > src.rows) {
+      throw std::invalid_argument("Recieved an invalid yShift");
+    }
+
+    if ((xShift == 0 || xShift == src.cols) && (yShift == 0 || yShift == src.rows)) {
+      dst = src;
+      return;
+    } else {
+      // roll columns
+      // roll is backwards
+      cv::hconcat(src(cv::Rect(xShift, 0, src.cols-xShift, src.rows)),
+                  src(cv::Rect(0, 0, xShift, src.rows)),
+                  dst);
+
+      // roll rows
+      cv::vconcat(dst(cv::Rect(0, yShift, dst.cols, dst.rows-yShift)),
+                  dst(cv::Rect(0, 0, dst.cols, yShift)),
+                  dst);
+    }
   }
 
-  cv::Point globalEdgeMotion(const cv::Mat &canny1, const cv::Mat &canny2, const int &radius)
+  cv::Point globalEdgeMotion(const cv::Mat &canny1,
+                             const cv::Mat &canny2,
+                             const int &radius)
   {
     std::vector<double> distances;
     std::vector<cv::Point> displacements;
@@ -151,8 +193,8 @@ namespace transdet
           {
             // calculate the distance between canny1 and canny2 pixels
             // within dx, dy offset
-            distances.push_back(_hammingDistance(canny1, canny2, dx, dy));
-            displacements.push_back(cv::Point(dx, dy))
+            distances.push_back(_hammingDist(canny1, canny2, dx, dy));
+            displacements.push_back(cv::Point(dx, dy));
           }
       }
 
@@ -187,12 +229,12 @@ namespace transdet
         _customCanny(grayNext, cannyNext);
 
         // calculate global edge motion between cannyNow and cannyNext
-        cv::Point motion = globalEdgeMotion(cannyNow, cannyNext);
+        cv::Point motion = globalEdgeMotion(cannyNow, cannyNext, 6);
 
         // compute the percent difference
         // TODO implement roll
-        rollCvMat(cannyNow, motion.y, 0);
-        rollCvMat(cannyNow, motion.x, 1);
+        // rollCvMat(cannyNow, motion.y, 0);
+        // rollCvMat(cannyNow, motion.x, 1);
 
         // if the difference is over the threshold we found a scene transition
       }
@@ -224,8 +266,11 @@ int main(int argc, char** argv )
     return -1;
   }
 
+  Mat shifted;
+  transdet::rollCvMat(image1, shifted, 50, 50);
+
   namedWindow("Display Image", WINDOW_AUTOSIZE );
-  imshow("Display Image", image1);
+  imshow("Display Image", shifted);
   waitKey(0);
   return 0;
 }
