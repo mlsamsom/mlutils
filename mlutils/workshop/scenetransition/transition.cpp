@@ -134,6 +134,10 @@ namespace transdet
 
   // MAIN FUNCTIONS
   //------------------------------------------------------------------------------------
+  void rollCvMat(cv::Mat &m, const int &shift, const int &axis)
+  {
+    // re-implement numpy roll function
+  }
 
   cv::Point globalEdgeMotion(const cv::Mat &canny1, const cv::Mat &canny2, const int &radius)
   {
@@ -186,7 +190,9 @@ namespace transdet
         cv::Point motion = globalEdgeMotion(cannyNow, cannyNext);
 
         // compute the percent difference
-        // TODO roll the image in both axes by the motion
+        // TODO implement roll
+        rollCvMat(cannyNow, motion.y, 0);
+        rollCvMat(cannyNow, motion.x, 1);
 
         // if the difference is over the threshold we found a scene transition
       }

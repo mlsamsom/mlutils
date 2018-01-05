@@ -8,14 +8,19 @@
 
 namespace transdet
 {
+  // FUNCTION SIGNATURES
   // HELPERS
   //------------------------------------------------------------------------------------
 
   /*
-   * Roll a matrix over by axis
+   * Roll an OpenCV matrix over by axis
+   *
    * TODO move this into a more global utilities header
+   * @param &m an opencv image matrix
+   * @param &shift the amount of pixels to shift by
+   * @param &axis the axis in which to perform shift (0 or 1)
    */
-  void roll(cv::Mat &m, const int &shift, const int &axis);
+  void rollCvMat(cv::Mat &m, const int &shift, const int &axis);
   //------------------------------------------------------------------------------------
 
   /*
