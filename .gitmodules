@@ -1,0 +1,3 @@
+[submodule "mlutils/third_party/dlib"]
+	path = mlutils/third_party/dlib
+	url = https://github.com/davisking/dlib.git
