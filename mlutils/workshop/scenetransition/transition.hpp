@@ -19,12 +19,11 @@ namespace transdet
    * @param &src an opencv image matrix
    * @param &dst an opencv image matrix
    * @param &shift the amount of pixels to shift by
-   * @param &axis the axis in which to perform shift (0 or 1)
+   * @param &axis the axis in which to perform shift (0 (vert) or 1 (horiz))
    */
-  void rollCvMat(const cv::Mat &src,
-                 cv::Mat &dst,
-                 const int &xShift,
-                 const int &yShift);
+  void rollCvMat(cv::Mat &dst,
+                 const int &shift,
+                 const int &axis);
   //------------------------------------------------------------------------------------
 
   /*

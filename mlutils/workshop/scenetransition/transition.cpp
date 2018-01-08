@@ -77,8 +77,13 @@ namespace transdet
     double median = _medianMat(src, 2^8);
     double sigma = 0.33;
 
+    cout << median << endl;
+
     int lowThresh = (int)std::max(0.0, (1.0 - sigma) * median);
     int highThresh = (int)std::min(0.0, (1.0 - sigma) * median);
+
+    cout << lowThresh << endl;
+    cout << highThresh << endl;
 
     // compute canny
     Canny(src, dst, lowThresh, highThresh, 4);
@@ -147,36 +152,60 @@ namespace transdet
 
   // MAIN FUNCTIONS
   //------------------------------------------------------------------------------------
-  void rollCvMat(const cv::Mat &src,
-                 cv::Mat &dst,
-                 const int &xShift,
-                 const int &yShift)
+  void rollCvMat(cv::Mat &dst,
+                 const int &shift,
+                 const int &axis)
   {
-    // TODO this needs to be optimized
+    // TODO figure out why double roll is broken
+    // making a copy for now
+    const Mat orig = dst.clone();
 
-    if (xShift < 0 || xShift > src.cols) {
-      throw std::invalid_argument("Recieved an invalid xShift");
-    }
+    const int height = orig.rows;
+    const int width = orig.cols;
 
-    if (yShift < 0 || yShift > src.rows) {
-      throw std::invalid_argument("Recieved an invalid yShift");
-    }
-
-    if ((xShift == 0 || xShift == src.cols) && (yShift == 0 || yShift == src.rows)) {
-      dst = src;
-      return;
-    } else {
-      // roll columns
-      // roll is backwards
-      cv::hconcat(src(cv::Rect(xShift, 0, src.cols-xShift, src.rows)),
-                  src(cv::Rect(0, 0, xShift, src.rows)),
-                  dst);
+    if (axis == 0) {
+      const int shiftPoint = height-shift;
 
       // roll rows
-      cv::vconcat(dst(cv::Rect(0, yShift, dst.cols, dst.rows-yShift)),
-                  dst(cv::Rect(0, 0, dst.cols, yShift)),
+      // check shift inputs
+      if (shift < 0 || shift > height) {
+        throw std::invalid_argument("Recieved an invalid shift");
+      }
+
+      // if no shift just copy the image into the dst
+      if (shift == 0 || shift == height) {
+        dst == orig;
+        return;
+      }
+
+      // perform roll op
+      cv::vconcat(orig(cv::Rect(0, shiftPoint, width, shift)),
+                  orig(cv::Rect(0, 0, width, shiftPoint)),
                   dst);
+
+    }else if (axis == 1) {
+      const int shiftPoint = width-shift;
+
+      // roll cols
+      if (shift < 0 || shift > orig.cols) {
+        throw std::invalid_argument("Recieved an invalid shift");
+      }
+
+      // if no shift just copy the image into the dst
+      if (shift == 0 || shift == orig.cols) {
+        dst = orig;
+        return;
+      }
+
+      // perform roll op
+      cv::hconcat(orig(cv::Rect(shiftPoint, 0, shift, height)),
+                  orig(cv::Rect(0, 0, shiftPoint, height)),
+                  dst);
+
+    } else {
+      throw std::invalid_argument("Recieved and invalid axis values");
     }
+
   }
 
   cv::Point globalEdgeMotion(const cv::Mat &canny1,
@@ -266,11 +295,52 @@ int main(int argc, char** argv )
     return -1;
   }
 
-  Mat shifted;
-  transdet::rollCvMat(image1, shifted, 50, 50);
+  //------------------------------------------------------------------------------------
+  cout << "Testing _medianMat" << endl;
+
+  //------------------------------------------------------------------------------------
+  cout << "Testing _frameDiff" << endl;
+
+  //------------------------------------------------------------------------------------
+  cout << "Testing _customCanny" << endl;
+
+  //------------------------------------------------------------------------------------
+  cout << "Testing _hammingDist" << endl;
+
+  //------------------------------------------------------------------------------------
+  cout << "Testing roll" << endl;
+  transdet::rollCvMat(image1, 50, 1);
+  transdet::rollCvMat(image1, 50, 0);
 
   namedWindow("Display Image", WINDOW_AUTOSIZE );
-  imshow("Display Image", shifted);
+  imshow("Display Image", image1);
   waitKey(0);
+
+  //------------------------------------------------------------------------------------
+  cout << "Testing globalEdgeMotion" << endl;
+  Mat grayNow, grayNext, cannyNow, cannyNext;
+
+  // resize second image to match first
+  cv::Mat image2_rs;
+  cv::resize(image2, image2_rs, image1.size());
+
+  // convert to grayscale
+  cvtColor(image1, grayNow, cv::COLOR_RGB2GRAY);
+  cvtColor(image2_rs, grayNext, cv::COLOR_RGB2GRAY);
+
+  // get canny transforms for this and the next frames
+  // no need to reduce noise for this application
+  transdet::_customCanny(grayNow, cannyNow);
+  transdet::_customCanny(grayNext, cannyNext);
+
+  // calculate global edge motion between cannyNow and cannyNext
+  cv::Point motion = transdet::globalEdgeMotion(cannyNow, cannyNext, 6);
+
+  //------------------------------------------------------------------------------------
+  cout << "Testing sceneDetEdges" << endl;
+
+  //------------------------------------------------------------------------------------
+  cout << "Testing sceneDetColors" << endl;
+
   return 0;
 }
