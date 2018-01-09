@@ -14,23 +14,21 @@ namespace transdet
   // HELPERS
   //------------------------------------------------------------------------------------
 
-  double _medianMat(const cv::Mat &input, const int &nVals)
+  double _medianChannel(const cv::Mat &input)
   {
-    // compute histogram
+    // compute histogram on a channel in an image
+    int nVals = 256;
+    const int* channels = {0};
     float range[] = { 0, (float)nVals };
     const float* histRange = { range };
-    int channels[] = {0};
-    bool uniform = true;
-    bool accumulate = false;
-    int histSize[] = { nVals };
-
+    bool uniform = true; bool accumulate = false;
     cv::Mat hist;
-    cv::calcHist(&input, 1, channels, cv::Mat(), hist, 1, histSize, &histRange);
+    cv::calcHist(&input, 1, channels, cv::Mat(), hist, 1, &nVals, &histRange, uniform, accumulate);
 
     // calculate CDF
     cv::Mat cdf;
     hist.copyTo(cdf);
-    for (int i = 1; i <= nVals-1; i++)
+    for (int i = 1; i < nVals; i++)
       {
         cdf.at<float>(i) += cdf.at<float>(i - 1);
       }
@@ -38,14 +36,38 @@ namespace transdet
 
     // compute median
     double medianVal;
-    for (int i = 0; i <= nVals-1; i++)
+    for (int i = 0; i < nVals; i++)
       {
         if (cdf.at<float>(i) >= 0.5) {
           medianVal = i;
           break;
         }
       }
-    return medianVal/nVals;
+    return (double)medianVal;
+  }
+
+  //------------------------------------------------------------------------------------
+
+  double _medianMat(const cv::Mat &input)
+  {
+    // Grayscale image
+    if (input.channels() == 1) {
+      return _medianChannel(input);
+
+    // 3 channel image
+    }else if (input.channels() == 3) {
+      // split image
+      std::vector<cv::Mat> bgr;
+      cv::split(input, bgr);
+
+      cv::Mat flat;
+      cv::hconcat(bgr, flat);
+      return _medianChannel(flat);
+
+    // ignoring 4 channel images
+    } else {
+      throw std::length_error("Invalid image channels");
+    }
   }
 
   //------------------------------------------------------------------------------------
@@ -74,11 +96,16 @@ namespace transdet
   void _customCanny(const cv::Mat &src, cv::Mat &dst)
   {
     // find thresholds
-    double median = _medianMat(src, 2^8);
+    double median = _medianMat(src);
     double sigma = 0.33;
+
+    cout << median << endl;
 
     int lowThresh = (int)std::max(0.0, (1.0 - sigma) * median);
     int highThresh = (int)std::min(0.0, (1.0 - sigma) * median);
+
+    cout << lowThresh << endl;
+    cout << highThresh << endl;
 
     // compute canny
     Canny(src, dst, lowThresh, highThresh, 4);
@@ -147,36 +174,60 @@ namespace transdet
 
   // MAIN FUNCTIONS
   //------------------------------------------------------------------------------------
-  void rollCvMat(const cv::Mat &src,
-                 cv::Mat &dst,
-                 const int &xShift,
-                 const int &yShift)
+  void rollCvMat(cv::Mat &dst,
+                 const int &shift,
+                 const int &axis)
   {
-    // TODO this needs to be optimized
+    // TODO figure out why double roll is broken
+    // making a copy for now
+    const Mat orig = dst.clone();
 
-    if (xShift < 0 || xShift > src.cols) {
-      throw std::invalid_argument("Recieved an invalid xShift");
-    }
+    const int height = orig.rows;
+    const int width = orig.cols;
 
-    if (yShift < 0 || yShift > src.rows) {
-      throw std::invalid_argument("Recieved an invalid yShift");
-    }
-
-    if ((xShift == 0 || xShift == src.cols) && (yShift == 0 || yShift == src.rows)) {
-      dst = src;
-      return;
-    } else {
-      // roll columns
-      // roll is backwards
-      cv::hconcat(src(cv::Rect(xShift, 0, src.cols-xShift, src.rows)),
-                  src(cv::Rect(0, 0, xShift, src.rows)),
-                  dst);
+    if (axis == 0) {
+      const int shiftPoint = height-shift;
 
       // roll rows
-      cv::vconcat(dst(cv::Rect(0, yShift, dst.cols, dst.rows-yShift)),
-                  dst(cv::Rect(0, 0, dst.cols, yShift)),
+      // check shift inputs
+      if (shift < 0 || shift > height) {
+        throw std::invalid_argument("Recieved an invalid shift");
+      }
+
+      // if no shift just copy the image into the dst
+      if (shift == 0 || shift == height) {
+        dst == orig;
+        return;
+      }
+
+      // perform roll op
+      cv::vconcat(orig(cv::Rect(0, shiftPoint, width, shift)),
+                  orig(cv::Rect(0, 0, width, shiftPoint)),
                   dst);
+
+    }else if (axis == 1) {
+      const int shiftPoint = width-shift;
+
+      // roll cols
+      if (shift < 0 || shift > orig.cols) {
+        throw std::invalid_argument("Recieved an invalid shift");
+      }
+
+      // if no shift just copy the image into the dst
+      if (shift == 0 || shift == orig.cols) {
+        dst = orig;
+        return;
+      }
+
+      // perform roll op
+      cv::hconcat(orig(cv::Rect(shiftPoint, 0, shift, height)),
+                  orig(cv::Rect(0, 0, shiftPoint, height)),
+                  dst);
+
+    } else {
+      throw std::invalid_argument("Recieved and invalid axis values");
     }
+
   }
 
   cv::Point globalEdgeMotion(const cv::Mat &canny1,
@@ -244,33 +295,81 @@ namespace transdet
 
 } // namespace transdet
 
-int main(int argc, char** argv )
+int main()
 {
-  cout << "RUNNING TEST" << endl;
-  if ( argc != 3 ) {
-    printf("usage: DisplayImage.out <Image_Path1> <Image_Path2\n");
-    return -1;
-  }
+  cout << "RUNNING TESTS" << endl;
 
   Mat image1;
-  image1 = imread( argv[1], 1 );
+  image1 = imread( "../testims/mt1.jpg", 1 );
   if ( !image1.data ) {
     printf("No image data \n");
     return -1;
   }
 
   Mat image2;
-  image2 = imread( argv[2], 1 );
+  image2 = imread( "../testims/mt2.jpg", 1 );
   if ( !image2.data ) {
     printf("No image data \n");
     return -1;
   }
 
-  Mat shifted;
-  transdet::rollCvMat(image1, shifted, 50, 50);
+  //------------------------------------------------------------------------------------
+  cout << "\nTesting _medianMat" << endl;
+  double med = transdet::_medianMat(image1);
+  if (med == 121.0) {
+    cout << "[SUCCESS] _medianMat" << endl;
+  } else {
+    cout << "[FAILED] _medianMat" << endl;
+  }
 
-  namedWindow("Display Image", WINDOW_AUTOSIZE );
-  imshow("Display Image", shifted);
-  waitKey(0);
+  //------------------------------------------------------------------------------------
+  cout << "\nTesting _frameDiff" << endl;
+  // resize image 2 to equal image 1
+
+
+  // get grayscales
+
+  // get cannys
+
+  // get percent difference
+  // should be around 0.00044083595275878906
+
+  //------------------------------------------------------------------------------------
+
+  // //------------------------------------------------------------------------------------
+  // cout << "Testing roll" << endl;
+  // transdet::rollCvMat(image1, 50, 1);
+  // transdet::rollCvMat(image1, 50, 0);
+
+  // namedWindow("Display Image", WINDOW_AUTOSIZE );
+  // imshow("Display Image", image1);
+  // waitKey(0);
+
+  // //------------------------------------------------------------------------------------
+  // cout << "Testing globalEdgeMotion" << endl;
+  // Mat grayNow, grayNext, cannyNow, cannyNext;
+
+  // // resize second image to match first
+  // cv::Mat image2_rs;
+  // cv::resize(image2, image2_rs, image1.size());
+
+  // // convert to grayscale
+  // cvtColor(image1, grayNow, cv::COLOR_RGB2GRAY);
+  // cvtColor(image2_rs, grayNext, cv::COLOR_RGB2GRAY);
+
+  // // get canny transforms for this and the next frames
+  // // no need to reduce noise for this application
+  // transdet::_customCanny(grayNow, cannyNow);
+  // transdet::_customCanny(grayNext, cannyNext);
+
+  // // calculate global edge motion between cannyNow and cannyNext
+  // cv::Point motion = transdet::globalEdgeMotion(cannyNow, cannyNext, 6);
+
+  // //------------------------------------------------------------------------------------
+  // cout << "Testing sceneDetEdges" << endl;
+
+  // //------------------------------------------------------------------------------------
+  // cout << "Testing sceneDetColors" << endl;
+
   return 0;
 }

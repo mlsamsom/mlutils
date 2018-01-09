@@ -19,22 +19,32 @@ namespace transdet
    * @param &src an opencv image matrix
    * @param &dst an opencv image matrix
    * @param &shift the amount of pixels to shift by
-   * @param &axis the axis in which to perform shift (0 or 1)
+   * @param &axis the axis in which to perform shift (0 (vert) or 1 (horiz))
    */
-  void rollCvMat(const cv::Mat &src,
-                 cv::Mat &dst,
-                 const int &xShift,
-                 const int &yShift);
+  void rollCvMat(cv::Mat &dst,
+                 const int &shift,
+                 const int &axis);
   //------------------------------------------------------------------------------------
 
   /*
+   * Compute the median value of a channel matrix
+   * helper function for median mat
+   *
+   * @param input an input image
+   * @returns median of a matrix
+   */
+  double _medianChannel(const cv::Mat &input);
+
+  //------------------------------------------------------------------------------------
+  /*
    * Compute the median value of a matrix
+   * only works for 1 or 3 channel images
    *
    * @param input an input image
    * @param nVals number of bins for the histogram
    * @returns median of a matrix
    */
-  double _medianMat(const cv::Mat &input, const int &nVals);
+  double _medianMat(const cv::Mat &input);
 
   //------------------------------------------------------------------------------------
 
