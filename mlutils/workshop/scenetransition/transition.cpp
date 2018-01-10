@@ -23,7 +23,8 @@ namespace transdet
     const float* histRange = { range };
     bool uniform = true; bool accumulate = false;
     cv::Mat hist;
-    cv::calcHist(&input, 1, channels, cv::Mat(), hist, 1, &nVals, &histRange, uniform, accumulate);
+    cv::calcHist(&input, 1, channels, cv::Mat(), hist, 1, &nVals,
+                 &histRange, uniform, accumulate);
 
     // calculate CDF
     cv::Mat cdf;
@@ -99,16 +100,11 @@ namespace transdet
     double median = _medianMat(src);
     double sigma = 0.33;
 
-    cout << median << endl;
-
     int lowThresh = (int)std::max(0.0, (1.0 - sigma) * median);
-    int highThresh = (int)std::min(0.0, (1.0 - sigma) * median);
-
-    cout << lowThresh << endl;
-    cout << highThresh << endl;
+    int highThresh = (int)std::min(255.0, (1.0 + sigma) * median);
 
     // compute canny
-    Canny(src, dst, lowThresh, highThresh, 4);
+    Canny(src, dst, lowThresh, highThresh, 3);
   }
 
   //------------------------------------------------------------------------------------
@@ -196,7 +192,7 @@ namespace transdet
 
       // if no shift just copy the image into the dst
       if (shift == 0 || shift == height) {
-        dst == orig;
+        dst = orig;
         return;
       }
 
@@ -289,6 +285,7 @@ namespace transdet
 
         // if the difference is over the threshold we found a scene transition
       }
+    return detectedScene;
   }
 
   //------------------------------------------------------------------------------------
@@ -325,14 +322,23 @@ int main()
   //------------------------------------------------------------------------------------
   cout << "\nTesting _frameDiff" << endl;
   // resize image 2 to equal image 1
-
+  Mat image2rz;
+  cv::resize(image2, image2rz, image1.size());
 
   // get grayscales
+  Mat gray1, gray2;
+  cv::cvtColor(image1, gray1, cv::COLOR_BGR2GRAY);
+  cv::cvtColor(image2rz, gray2, cv::COLOR_BGR2GRAY);
 
-  // get cannys
+  // get Canny
+  Mat canny1, canny2;
+  transdet::_customCanny(gray1, canny1);
+  transdet::_customCanny(gray2, canny2);
 
   // get percent difference
+  double diff = transdet::_frameDiff(canny1, canny2, 6);
   // should be around 0.00044083595275878906
+  cout << diff << endl;
 
   //------------------------------------------------------------------------------------
 
