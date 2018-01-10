@@ -89,7 +89,7 @@ namespace transdet
     cv::bitwise_and(e_1, e_2, tmpand);
     percent_diff = cv::sum(tmpand)[0] / cv::sum(e_1)[0];
 
-    return percent_diff;
+    return 1.0 - percent_diff;
   }
 
   //------------------------------------------------------------------------------------
@@ -119,42 +119,19 @@ namespace transdet
     if ((binImg1.rows != binImg2.rows) || (binImg1.cols != binImg2.cols)) {
       cout << "[ERROR] in _hammingDist" << endl;
       cout << "Images must be the same size" << endl;
-      return dist;
+      throw std::out_of_range("_hammingDist");
     }
 
-    int xrange = binImg1.cols;
-    int yrange = binImg1.rows;
-    double total = 0.0;
-    // TODO optimize loop
-    // TODO batch the rows into chars or something to speed up bitwise operation
-    // TODO or change the implementation to use a border of radius and opencv bitwise_xor
-    uint8_t* pixelPtr1 = (uint8_t*)binImg1.data;
-    uint8_t* pixelPtr2 = (uint8_t*)binImg2.data;
-    for (int row; row < yrange; row++)
-      {
-        for (int col; col < xrange; col++)
-          {
-            // bitwise hamming distance
-            int rhscol;
-            if (rhscol > xrange) {
-              rhscol = xrange - xShift;
-            } else {
-              rhscol = col + xShift;
-            }
+    // TODO use C style pointer access instead of the copt to improve efficiency
+    Mat next = binImg2.clone();
+    rollCvMat(next, yShift, 0);
+    rollCvMat(next, xShift, 1);
 
-            int rhsrow;
-            if (rhsrow > yrange) {
-              rhsrow = yrange - yShift;
-            } else {
-              rhsrow = row + yShift;
-            }
+    Mat xorImg;
+    bitwise_xor(binImg1, next, xorImg);
+    auto total = cv::sum(xorImg)[0];
 
-            uint8_t bin1Pix = pixelPtr1[row*xrange + col];
-            uint8_t bin2Pix = pixelPtr2[rhsrow*xrange + rhscol];
-            if (bin1Pix ^ bin2Pix) { total += 1.0; }
-          }
-      }
-    dist = total / ( (double)xrange * (double)yrange );
+    dist = (double)total / ( 255 * (double)binImg1.cols * (double)binImg2.rows );
     return dist;
   }
 
@@ -174,19 +151,17 @@ namespace transdet
                  const int &shift,
                  const int &axis)
   {
-    // TODO figure out why double roll is broken
-    // making a copy for now
+    // NOTE the better way to do this might be to rearrange the Mat header
+    // might be able to hack it with std::rotate?
     const Mat orig = dst.clone();
 
     const int height = orig.rows;
     const int width = orig.cols;
 
     if (axis == 0) {
-      const int shiftPoint = height-shift;
-
       // roll rows
       // check shift inputs
-      if (shift < 0 || shift > height) {
+      if (shift > height) {
         throw std::invalid_argument("Recieved an invalid shift");
       }
 
@@ -196,16 +171,24 @@ namespace transdet
         return;
       }
 
-      // perform roll op
-      cv::vconcat(orig(cv::Rect(0, shiftPoint, width, shift)),
-                  orig(cv::Rect(0, 0, width, shiftPoint)),
-                  dst);
+      if (shift > 0) {
+        const int shiftPoint = height-shift;
+        cv::vconcat(orig(cv::Rect(0, shiftPoint, width, shift)),
+                    orig(cv::Rect(0, 0, width, shiftPoint)),
+                    dst);
+
+      }else if (shift < 0) {
+        int pshift = -shift;
+        cv::vconcat(orig(cv::Rect(0, pshift, width, height-pshift)),
+                    orig(cv::Rect(0, 0, width, pshift)),
+                    dst);
+      } else {
+        cout << "impossible" << endl;
+      }
 
     }else if (axis == 1) {
-      const int shiftPoint = width-shift;
-
       // roll cols
-      if (shift < 0 || shift > orig.cols) {
+      if (shift > orig.cols) {
         throw std::invalid_argument("Recieved an invalid shift");
       }
 
@@ -216,9 +199,17 @@ namespace transdet
       }
 
       // perform roll op
-      cv::hconcat(orig(cv::Rect(shiftPoint, 0, shift, height)),
-                  orig(cv::Rect(0, 0, shiftPoint, height)),
-                  dst);
+      if (shift > 0) {
+        const int shiftPoint = width-shift;
+        cv::hconcat(orig(cv::Rect(shiftPoint, 0, shift, height)),
+                    orig(cv::Rect(0, 0, shiftPoint, height)),
+                    dst);
+      }else if (shift < 0) {
+        int pshift = -shift;
+        cv::hconcat(orig(cv::Rect(pshift, 0, width-pshift, height)),
+                    orig(cv::Rect(0, 0, pshift, height)),
+                    dst);
+      }
 
     } else {
       throw std::invalid_argument("Recieved and invalid axis values");
@@ -240,7 +231,9 @@ namespace transdet
           {
             // calculate the distance between canny1 and canny2 pixels
             // within dx, dy offset
-            distances.push_back(_hammingDist(canny1, canny2, dx, dy));
+            auto distance = _hammingDist(canny1, canny2, dx, dy);
+            distances.push_back(distance);
+            cout << distance << endl;
             displacements.push_back(cv::Point(dx, dy));
           }
       }
@@ -294,7 +287,7 @@ namespace transdet
 
 int main()
 {
-  cout << "RUNNING TESTS" << endl;
+  cout << "RUNNING TESTS" << endl << endl;
 
   Mat image1;
   image1 = imread( "../testims/mt1.jpg", 1 );
@@ -311,7 +304,6 @@ int main()
   }
 
   //------------------------------------------------------------------------------------
-  cout << "\nTesting _medianMat" << endl;
   double med = transdet::_medianMat(image1);
   if (med == 121.0) {
     cout << "[SUCCESS] _medianMat" << endl;
@@ -320,7 +312,22 @@ int main()
   }
 
   //------------------------------------------------------------------------------------
-  cout << "\nTesting _frameDiff" << endl;
+  // cout << "\nTesting rollCvMat" << endl;
+  // Mat posroll = image1.clone();
+  // transdet::rollCvMat(posroll, 50, 0);
+  // transdet::rollCvMat(posroll, 50, 1);
+  // namedWindow("win", WINDOW_AUTOSIZE);
+  // imshow("win", posroll);
+  // waitKey(0);
+
+  // Mat negroll = image1.clone();
+  // transdet::rollCvMat(negroll, -50, 0);
+  // transdet::rollCvMat(negroll, -50, 1);
+  // namedWindow("win", WINDOW_AUTOSIZE);
+  // imshow("win", negroll);
+  // waitKey(0);
+
+  //------------------------------------------------------------------------------------
   // resize image 2 to equal image 1
   Mat image2rz;
   cv::resize(image2, image2rz, image1.size());
@@ -336,40 +343,64 @@ int main()
   transdet::_customCanny(gray2, canny2);
 
   // get percent difference
-  double diff = transdet::_frameDiff(canny1, canny2, 6);
-  // should be around 0.00044083595275878906
-  cout << diff << endl;
+  double diff1 = transdet::_frameDiff(canny1, canny2, 1);
+  int test = (int)(diff1*100);
+  if (test == 27) {
+    cout << "[SUCCESS] _frameDiff" << endl;
+  } else {
+    cout << "[FALIED] _frameDiff" << endl;
+    cout << test << endl;
+  }
+
+  //------------------------------------------------------------------------------------
+  // TODO make a better test
+  Mat E = Mat::eye(10, 10, CV_8UC1);
+  Mat O = Mat::ones(10, 10, CV_8UC1);
+  Mat cE, cO;
+  transdet::_customCanny(E, cE);
+  transdet::_customCanny(O, cO);
+  // cout << "E = " << endl << " " << E << endl << endl;
+
+  // namedWindow("Dimg", WINDOW_AUTOSIZE);
+  // imshow("Dimg", E);
+  // waitKey(0);
+  // namedWindow("Dimg", WINDOW_AUTOSIZE);
+  // imshow("Dimg", O);
+  // waitKey(0);
+
+  // no shift
+  double d1 = transdet::_hammingDist(cE, cO, 0, 0);
+  // neg shift
+  double d2 = transdet::_hammingDist(cE, cO, -1, -2);
+  // pos shift
+  double d3 = transdet::_hammingDist(cE, cO, 1, 2);
+
+  if (d1 == 0.2 && d2 == 0.2 && d3 == 0.2) {
+    cout << "[SUCCESS] _hammingDist" << endl;
+  } else {
+    cout << "[FAILED] _hammingDist" << endl;
+    cout << d1 << " " << d2 << " " << d3 << endl;
+
+    cout << "cE = " << endl << " " << cE << endl << endl;
+    cout << "cO = " << endl << " " << cO << endl << endl;
+  }
 
   //------------------------------------------------------------------------------------
 
-  // //------------------------------------------------------------------------------------
-  // cout << "Testing roll" << endl;
-  // transdet::rollCvMat(image1, 50, 1);
-  // transdet::rollCvMat(image1, 50, 0);
+  cv::Point motion = transdet::globalEdgeMotion(cE, cO, 6);
 
-  // namedWindow("Display Image", WINDOW_AUTOSIZE );
-  // imshow("Display Image", image1);
-  // waitKey(0);
+  cout << "cE: " << endl;
+  cout << cE << endl;
 
-  // //------------------------------------------------------------------------------------
-  // cout << "Testing globalEdgeMotion" << endl;
-  // Mat grayNow, grayNext, cannyNow, cannyNext;
-
-  // // resize second image to match first
-  // cv::Mat image2_rs;
-  // cv::resize(image2, image2_rs, image1.size());
-
-  // // convert to grayscale
-  // cvtColor(image1, grayNow, cv::COLOR_RGB2GRAY);
-  // cvtColor(image2_rs, grayNext, cv::COLOR_RGB2GRAY);
-
-  // // get canny transforms for this and the next frames
-  // // no need to reduce noise for this application
-  // transdet::_customCanny(grayNow, cannyNow);
-  // transdet::_customCanny(grayNext, cannyNext);
-
-  // // calculate global edge motion between cannyNow and cannyNext
-  // cv::Point motion = transdet::globalEdgeMotion(cannyNow, cannyNext, 6);
+  if (motion.x == 0 && motion.y == 0) {
+    cout << "[SUCCESS] globalEdgeMotion" << endl;
+  } else {
+    cout << "[FAILED] globalEdgeMotion" << endl;
+    cout << "motion: [" << motion.x << ", " << motion.y << "]\n";
+    cout << "cE = " << endl << " " << cE << endl << endl;
+    transdet::rollCvMat(cE, 3, 0);
+    cout << "cE = " << endl << " " << cE << endl << endl;
+  }
 
   // //------------------------------------------------------------------------------------
   // cout << "Testing sceneDetEdges" << endl;
