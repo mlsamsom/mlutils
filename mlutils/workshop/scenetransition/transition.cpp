@@ -110,9 +110,7 @@ namespace transdet
   //------------------------------------------------------------------------------------
 
   double _hammingDist(const cv::Mat &binImg1,
-                      const cv::Mat &binImg2,
-                      const int &xShift,
-                      const int &yShift)
+                      const cv::Mat &binImg2)
   {
     double dist = -1.0;
     // loop through the matrix, calculate the mate and then distance
@@ -122,13 +120,8 @@ namespace transdet
       throw std::out_of_range("_hammingDist");
     }
 
-    // TODO use C style pointer access instead of the copt to improve efficiency
-    Mat next = binImg2.clone();
-    rollCvMat(next, yShift, 0);
-    rollCvMat(next, xShift, 1);
-
     Mat xorImg;
-    bitwise_xor(binImg1, next, xorImg);
+    bitwise_xor(binImg1, binImg2, xorImg);
     auto total = cv::sum(xorImg)[0];
 
     dist = (double)total / ( 255 * (double)binImg1.cols * (double)binImg2.rows );
@@ -151,71 +144,60 @@ namespace transdet
                  const int &shift,
                  const int &axis)
   {
-    // NOTE the better way to do this might be to rearrange the Mat header
-    // might be able to hack it with std::rotate?
-    const Mat orig = dst.clone();
+    const int height = dst.rows;
+    const int width = dst.cols;
+    int pshift;
 
-    const int height = orig.rows;
-    const int width = orig.cols;
+    if (dst.channels() != 1) {
+      throw std::out_of_range("[ERROR] rollCvMat, must be 1 channel image");
+    }
 
-    if (axis == 0) {
-      // roll rows
-      // check shift inputs
-      if (shift > height) {
-        throw std::invalid_argument("Recieved an invalid shift");
-      }
+    if (shift == 0) {
+      return;
+    }
 
-      // if no shift just copy the image into the dst
-      if (shift == 0 || shift == height) {
-        dst = orig;
-        return;
-      }
-
+    if (axis == 1) {
       if (shift > 0) {
-        const int shiftPoint = height-shift;
-        cv::vconcat(orig(cv::Rect(0, shiftPoint, width, shift)),
-                    orig(cv::Rect(0, 0, width, shiftPoint)),
-                    dst);
-
-      }else if (shift < 0) {
-        int pshift = -shift;
-        cv::vconcat(orig(cv::Rect(0, pshift, width, height-pshift)),
-                    orig(cv::Rect(0, 0, width, pshift)),
-                    dst);
+        pshift = shift;
       } else {
-        cout << "impossible" << endl;
+        pshift = height + shift;
       }
 
-    }else if (axis == 1) {
-      // roll cols
-      if (shift > orig.cols) {
-        throw std::invalid_argument("Recieved an invalid shift");
-      }
+      // make a flat header
+      dst = dst.reshape(1, height*width);
 
-      // if no shift just copy the image into the dst
-      if (shift == 0 || shift == orig.cols) {
-        dst = orig;
-        return;
-      }
+      // reverse matrix if shift is positive
+      std::rotate(dst.begin<uchar>(),
+                  dst.begin<uchar>()+pshift,
+                  dst.end<uchar>());
 
-      // perform roll op
+      // reshape matrix back
+      dst = dst.reshape(1, height);
+    }else if (axis == 0) {
       if (shift > 0) {
-        const int shiftPoint = width-shift;
-        cv::hconcat(orig(cv::Rect(shiftPoint, 0, shift, height)),
-                    orig(cv::Rect(0, 0, shiftPoint, height)),
-                    dst);
-      }else if (shift < 0) {
-        int pshift = -shift;
-        cv::hconcat(orig(cv::Rect(pshift, 0, width-pshift, height)),
-                    orig(cv::Rect(0, 0, pshift, height)),
-                    dst);
+        pshift = shift;
+      } else {
+        pshift = width + shift;
       }
 
+      cv::transpose(dst, dst);
+      // flatten
+      dst = dst.reshape(1, height*width);
+
+      std::rotate(dst.begin<uchar>(),
+                  dst.begin<uchar>()+pshift,
+                  dst.end<uchar>());
+
+      // reshape matrix back
+      dst = dst.reshape(1, height);
+
+      cv::transpose(dst, dst);
     } else {
       throw std::invalid_argument("Recieved and invalid axis values");
     }
-
   }
+
+  //------------------------------------------------------------------------------------
 
   cv::Point globalEdgeMotion(const cv::Mat &canny1,
                              const cv::Mat &canny2,
@@ -231,9 +213,13 @@ namespace transdet
           {
             // calculate the distance between canny1 and canny2 pixels
             // within dx, dy offset
-            auto distance = _hammingDist(canny1, canny2, dx, dy);
+            Mat cimage = canny2.clone();
+            rollCvMat(cimage, dy, 0);
+            rollCvMat(cimage, dx, 1);
+
+            auto distance = _hammingDist(cimage, canny1);
+            // cout << "[" << dx << ", " << dy << "] " << distance << endl;
             distances.push_back(distance);
-            cout << distance << endl;
             displacements.push_back(cv::Point(dx, dy));
           }
       }
@@ -311,24 +297,6 @@ int main()
     cout << "[FAILED] _medianMat" << endl;
   }
 
-  //------------------------------------------------------------------------------------
-  // cout << "\nTesting rollCvMat" << endl;
-  // Mat posroll = image1.clone();
-  // transdet::rollCvMat(posroll, 50, 0);
-  // transdet::rollCvMat(posroll, 50, 1);
-  // namedWindow("win", WINDOW_AUTOSIZE);
-  // imshow("win", posroll);
-  // waitKey(0);
-
-  // Mat negroll = image1.clone();
-  // transdet::rollCvMat(negroll, -50, 0);
-  // transdet::rollCvMat(negroll, -50, 1);
-  // namedWindow("win", WINDOW_AUTOSIZE);
-  // imshow("win", negroll);
-  // waitKey(0);
-
-  //------------------------------------------------------------------------------------
-  // resize image 2 to equal image 1
   Mat image2rz;
   cv::resize(image2, image2rz, image1.size());
 
@@ -353,13 +321,20 @@ int main()
   }
 
   //------------------------------------------------------------------------------------
-  // TODO make a better test
-  Mat E = Mat::eye(10, 10, CV_8UC1);
-  Mat O = Mat::ones(10, 10, CV_8UC1);
-  Mat cE, cO;
-  transdet::_customCanny(E, cE);
-  transdet::_customCanny(O, cO);
-  // cout << "E = " << endl << " " << E << endl << endl;
+  Mat testImg(10, 10, CV_8UC1, Scalar(255));
+  cv::rectangle(testImg, Point(2, 2), Point(7, 7), Scalar(0, 0, 0), -1);
+  // cout << "testImg = " << endl << " " << testImg << endl << endl;
+
+  Mat testCanny;
+  transdet::_customCanny(testImg, testCanny);
+  // cout << "testCanny = " << endl << " " << testCanny << endl << endl;
+
+  cout << "testing roll" << endl;
+  Mat testRoll = testImg.clone();
+  cout << endl << testRoll << endl <<  endl;
+  transdet::rollCvMat(testRoll, -2, 0);
+  // transdet::rollCvMat(testRoll, -6, 1);
+  cout << testRoll << endl;
 
   // namedWindow("Dimg", WINDOW_AUTOSIZE);
   // imshow("Dimg", E);
@@ -368,38 +343,40 @@ int main()
   // imshow("Dimg", O);
   // waitKey(0);
 
+  Mat testImg2 = testImg.clone();
   // no shift
-  double d1 = transdet::_hammingDist(cE, cO, 0, 0);
-  // neg shift
-  double d2 = transdet::_hammingDist(cE, cO, -1, -2);
-  // pos shift
-  double d3 = transdet::_hammingDist(cE, cO, 1, 2);
+  double d1 = transdet::_hammingDist(testImg, testImg2);
 
-  if (d1 == 0.2 && d2 == 0.2 && d3 == 0.2) {
+  // vert shift
+  Mat pSh = testImg2.clone();
+  transdet::rollCvMat(pSh, 1, 0);
+  transdet::rollCvMat(pSh, 1, 1);
+  double d2 = transdet::_hammingDist(testImg, pSh);
+
+  // pos shift
+  Mat nSh = testImg2.clone();
+  transdet::rollCvMat(nSh, -2, 0);
+  transdet::rollCvMat(nSh, -2, 1);
+  double d3 = transdet::_hammingDist(testImg, nSh);
+
+  if (d1 == 0.0 && d2 == 0.22 && d3 == 0.4) {
     cout << "[SUCCESS] _hammingDist" << endl;
   } else {
     cout << "[FAILED] _hammingDist" << endl;
     cout << d1 << " " << d2 << " " << d3 << endl;
-
-    cout << "cE = " << endl << " " << cE << endl << endl;
-    cout << "cO = " << endl << " " << cO << endl << endl;
   }
 
   //------------------------------------------------------------------------------------
 
-  cv::Point motion = transdet::globalEdgeMotion(cE, cO, 6);
+  transdet::rollCvMat(testImg2, -2, 0);
+  transdet::rollCvMat(testImg2, -2, 1);
+  cv::Point motion = transdet::globalEdgeMotion(testImg, testImg2, 6);
 
-  cout << "cE: " << endl;
-  cout << cE << endl;
-
-  if (motion.x == 0 && motion.y == 0) {
+  if (motion.x == -1 && motion.y == -1) {
     cout << "[SUCCESS] globalEdgeMotion" << endl;
   } else {
     cout << "[FAILED] globalEdgeMotion" << endl;
     cout << "motion: [" << motion.x << ", " << motion.y << "]\n";
-    cout << "cE = " << endl << " " << cE << endl << endl;
-    transdet::rollCvMat(cE, 3, 0);
-    cout << "cE = " << endl << " " << cE << endl << endl;
   }
 
   // //------------------------------------------------------------------------------------
