@@ -156,42 +156,10 @@ namespace transdet
       return;
     }
 
-    if (axis == 1) {
-      if (shift > 0) {
-        pshift = shift;
-      } else {
-        pshift = height + shift;
-      }
-
-      // make a flat header
-      dst = dst.reshape(1, height*width);
-
-      // reverse matrix if shift is positive
-      std::rotate(dst.begin<uchar>(),
-                  dst.begin<uchar>()+pshift,
-                  dst.end<uchar>());
-
-      // reshape matrix back
-      dst = dst.reshape(1, height);
-    }else if (axis == 0) {
-      if (shift > 0) {
-        pshift = shift;
-      } else {
-        pshift = width + shift;
-      }
-
-      cv::transpose(dst, dst);
-      // flatten
-      dst = dst.reshape(1, height*width);
-
-      std::rotate(dst.begin<uchar>(),
-                  dst.begin<uchar>()+pshift,
-                  dst.end<uchar>());
-
-      // reshape matrix back
-      dst = dst.reshape(1, height);
-
-      cv::transpose(dst, dst);
+    if (axis == 0) {
+      pshift = shift % height;
+      cout << "sdfa " << pshift << endl;
+    }else if (axis == 1) {
     } else {
       throw std::invalid_argument("Recieved and invalid axis values");
     }
@@ -332,10 +300,10 @@ int main()
   cout << "testing roll" << endl;
   Mat testRoll = testImg.clone();
   cout << endl << testRoll << endl <<  endl;
-  transdet::rollCvMat(testRoll, -2, 0);
+  transdet::rollCvMat(testRoll, 4, 0);
   // transdet::rollCvMat(testRoll, -6, 1);
   cout << testRoll << endl;
-
+  /*
   // namedWindow("Dimg", WINDOW_AUTOSIZE);
   // imshow("Dimg", E);
   // waitKey(0);
@@ -385,5 +353,6 @@ int main()
   // //------------------------------------------------------------------------------------
   // cout << "Testing sceneDetColors" << endl;
 
+  */
   return 0;
 }
