@@ -140,29 +140,64 @@ namespace transdet
 
   // MAIN FUNCTIONS
   //------------------------------------------------------------------------------------
-  void rollCvMat(cv::Mat &dst,
-                 const int &shift,
-                 const int &axis)
+  cv::Mat rollCvMat(const cv::Mat &a,
+                    const int &shift,
+                    const int &axis)
   {
-    const int height = dst.rows;
-    const int width = dst.cols;
-    int pshift;
-
-    if (dst.channels() != 1) {
+    if (a.channels() != 1) {
       throw std::out_of_range("[ERROR] rollCvMat, must be 1 channel image");
     }
 
     if (shift == 0) {
-      return;
+      return a;
     }
 
+    cv::Mat res(a.size(), a.type());
+
+    const int height = a.rows;
+    const int width = a.cols;
+    int pshift;
+    std::vector<int> idxs;
+
     if (axis == 0) {
-      pshift = shift % height;
-      cout << "sdfa " << pshift << endl;
+      for (int i = 0; i < height; i++) idxs.push_back(i);
+
+      if (shift < 0) {
+        pshift = height + shift;
+      } else {
+        pshift = shift;
+      }
+      pshift = pshift % height;
+
+      // NOTE could just use idxs to rearrange header?
+      std::rotate(idxs.rbegin(), idxs.rbegin()+pshift, idxs.rend());
+
+      for (int i = 0; i < height; i++)
+        {
+          a.row(idxs[i]).copyTo(res.row(i));
+        }
+
     }else if (axis == 1) {
+      for (int i = 0; i < width; i++) idxs.push_back(i);
+
+      if (shift < 0) {
+        pshift = width + shift;
+      } else {
+        pshift = shift;
+      }
+
+      pshift = pshift % width;
+      std::rotate(idxs.rbegin(), idxs.rbegin()+pshift, idxs.rend());
+
+      for (int i = 0; i < width; i++)
+        {
+          a.col(idxs[i]).copyTo(res.col(i));
+        }
     } else {
       throw std::invalid_argument("Recieved and invalid axis values");
     }
+
+    return res;
   }
 
   //------------------------------------------------------------------------------------
@@ -174,6 +209,7 @@ namespace transdet
     std::vector<double> distances;
     std::vector<cv::Point> displacements;
 
+    Mat cimage;
     // get hamming distances
     for (int dx = -radius; dx <= radius; dx++)
       {
@@ -181,12 +217,10 @@ namespace transdet
           {
             // calculate the distance between canny1 and canny2 pixels
             // within dx, dy offset
-            Mat cimage = canny2.clone();
-            rollCvMat(cimage, dy, 0);
-            rollCvMat(cimage, dx, 1);
+            cimage = rollCvMat(canny2, dy, 0);
+            cimage = rollCvMat(cimage, dx, 1);
 
             auto distance = _hammingDist(cimage, canny1);
-            // cout << "[" << dx << ", " << dy << "] " << distance << endl;
             distances.push_back(distance);
             displacements.push_back(cv::Point(dx, dy));
           }
@@ -297,19 +331,10 @@ int main()
   transdet::_customCanny(testImg, testCanny);
   // cout << "testCanny = " << endl << " " << testCanny << endl << endl;
 
-  cout << "testing roll" << endl;
-  Mat testRoll = testImg.clone();
-  cout << endl << testRoll << endl <<  endl;
-  transdet::rollCvMat(testRoll, 4, 0);
-  // transdet::rollCvMat(testRoll, -6, 1);
-  cout << testRoll << endl;
-  /*
-  // namedWindow("Dimg", WINDOW_AUTOSIZE);
-  // imshow("Dimg", E);
-  // waitKey(0);
-  // namedWindow("Dimg", WINDOW_AUTOSIZE);
-  // imshow("Dimg", O);
-  // waitKey(0);
+  // cout << "testing roll" << endl;
+  // Mat testRoll = testImg.clone();
+  // Mat tmp = transdet::rollCvMat(testRoll, 11, 0);
+  // Mat rollRes = transdet::rollCvMat(tmp, 11, 1);
 
   Mat testImg2 = testImg.clone();
   // no shift
@@ -317,14 +342,14 @@ int main()
 
   // vert shift
   Mat pSh = testImg2.clone();
-  transdet::rollCvMat(pSh, 1, 0);
-  transdet::rollCvMat(pSh, 1, 1);
+  pSh = transdet::rollCvMat(pSh, 1, 0);
+  pSh = transdet::rollCvMat(pSh, 1, 1);
   double d2 = transdet::_hammingDist(testImg, pSh);
 
   // pos shift
   Mat nSh = testImg2.clone();
-  transdet::rollCvMat(nSh, -2, 0);
-  transdet::rollCvMat(nSh, -2, 1);
+  nSh = transdet::rollCvMat(nSh, -2, 0);
+  nSh = transdet::rollCvMat(nSh, -2, 1);
   double d3 = transdet::_hammingDist(testImg, nSh);
 
   if (d1 == 0.0 && d2 == 0.22 && d3 == 0.4) {
@@ -336,11 +361,11 @@ int main()
 
   //------------------------------------------------------------------------------------
 
-  transdet::rollCvMat(testImg2, -2, 0);
-  transdet::rollCvMat(testImg2, -2, 1);
-  cv::Point motion = transdet::globalEdgeMotion(testImg, testImg2, 6);
+  Mat motTest = transdet::rollCvMat(testImg2, -2, 0);
+  motTest = transdet::rollCvMat(motTest, -2, 1);
+  cv::Point motion = transdet::globalEdgeMotion(testImg, motTest, 6);
 
-  if (motion.x == -1 && motion.y == -1) {
+  if (motion.x == 2 && motion.y == 2) {
     cout << "[SUCCESS] globalEdgeMotion" << endl;
   } else {
     cout << "[FAILED] globalEdgeMotion" << endl;
@@ -353,6 +378,5 @@ int main()
   // //------------------------------------------------------------------------------------
   // cout << "Testing sceneDetColors" << endl;
 
-  */
   return 0;
 }

@@ -15,14 +15,14 @@ namespace transdet
   /*
    * Roll an OpenCV matrix over by axis
    *
-   * TODO move this into a more global utilities header
-   * @param &dst an opencv image matrix
+   * TODO figure out how to re-write the header instead of making copies
+   * @param &a an opencv image matrix
    * @param &shift the amount of pixels to shift by
    * @param &axis the axis in which to perform shift (0 (vert) or 1 (horiz))
    */
-  void rollCvMat(cv::Mat &dst,
-                 const int &shift,
-                 const int &axis);
+  cv::Mat rollCvMat(const cv::Mat &a,
+                    const int &shift,
+                    const int &axis);
 
   //------------------------------------------------------------------------------------
 
