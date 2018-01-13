@@ -138,6 +138,37 @@ namespace transdet
 
   //------------------------------------------------------------------------------------
 
+  double _frameDiffEdge(const cv::Mat &currentImage,
+                        const cv::Mat &nextImage,
+                        const int &motionIter,
+                        const int &diffRadius)
+  {
+    Mat grayNow, grayNext, cannyNow, cannyNext;
+
+    // convert to grayscale
+    cvtColor(currentImage, grayNow, cv::COLOR_RGB2GRAY);
+    cvtColor(nextImage, grayNext, cv::COLOR_RGB2GRAY);
+
+    // get canny transforms for this and the next frames
+    // no need to reduce noise for this application
+    _customCanny(grayNow, cannyNow);
+    _customCanny(grayNext, cannyNext);
+
+    // calculate global edge motion between cannyNow and cannyNext
+    cv::Point motion = globalEdgeMotion(cannyNow, cannyNext, motionIter);
+    cannyNext = rollCvMat(cannyNext, motion.y, 0);
+    cannyNext = rollCvMat(cannyNext, motion.x, 1);
+
+    // compute the percent difference
+    double p_in = _frameDiff(cannyNow, cannyNext, diffRadius);
+    double p_out = _frameDiff(cannyNext, cannyNow, diffRadius);
+    double p = std::max(p_in, p_out);
+
+    return p;
+  }
+
+  //------------------------------------------------------------------------------------
+
   // MAIN FUNCTIONS
   //------------------------------------------------------------------------------------
   cv::Mat rollCvMat(const cv::Mat &a,
@@ -241,31 +272,68 @@ namespace transdet
   {
     // The first frame is always the beginning of the scene
     std::vector<int> detectedScene = {0};
-    int numIter = 6;
+    const int motionIter = 6;
+    const int diffRadius = 6;
 
     for (int i = 0; i < vidArray.size() - 1; i++)
       {
-        Mat grayNow, grayNext, cannyNow, cannyNext;
-
-        // convert to grayscale
-        cvtColor(vidArray[i], grayNow, cv::COLOR_RGB2GRAY);
-        cvtColor(vidArray[i+1], grayNext, cv::COLOR_RGB2GRAY);
-
-        // get canny transforms for this and the next frames
-        // no need to reduce noise for this application
-        _customCanny(grayNow, cannyNow);
-        _customCanny(grayNext, cannyNext);
-
-        // calculate global edge motion between cannyNow and cannyNext
-        cv::Point motion = globalEdgeMotion(cannyNow, cannyNext, 6);
-
-        // compute the percent difference
-        // TODO implement roll
-        // rollCvMat(cannyNow, motion.y, 0);
-        // rollCvMat(cannyNow, motion.x, 1);
+        double p = _frameDiffEdge(vidArray[i],
+                                  vidArray[i+1],
+                                  motionIter,
+                                  diffRadius);
 
         // if the difference is over the threshold we found a scene transition
+        bool lessThanThresh = p > threshold;
+        bool sceneLenOK = (i - detectedScene[detectedScene.size()-1]) > minSceneLen;
+        bool isTransition = lessThanThresh && sceneLenOK;
+
+        if (isTransition) { detectedScene.push_back(i); }
       }
+    return detectedScene;
+  }
+
+  //------------------------------------------------------------------------------------
+
+  std::vector<int> sceneDetEdges(const std::string &vidPath,
+                                 const float &threshold,
+                                 const int &minSceneLen)
+  {
+    const int motionIter = 6;
+    const int diffRadius = 6;
+    int p;
+
+    cv::VideoCapture cap(vidPath);
+    if (!cap.isOpened()) {
+      throw std::runtime_error("[ERROR] unable to open video");
+    }
+
+    std::vector<int> detectedScene = {0};
+    FrameBuffer frameBuffer(2);
+    int i = 0;
+    for (;;)
+      {
+        Mat frame;
+        cap >> frame;
+        if (frame.empty()) { break; }
+
+        frameBuffer.add(frame);
+
+        if (frameBuffer.full()) {
+          p = _frameDiffEdge(frameBuffer.frames[0],
+                             frameBuffer.frames[1],
+                             motionIter,
+                             diffRadius);
+
+          bool lessThanThresh = p > threshold;
+          bool sceneLenOK = (i - detectedScene[detectedScene.size()-1]) > minSceneLen;
+          bool isTransition = lessThanThresh && sceneLenOK;
+
+          if (isTransition) { detectedScene.push_back(i); }
+        }
+        i++;
+      }
+    cap.release();
+
     return detectedScene;
   }
 
@@ -363,7 +431,7 @@ int main()
 
   Mat motTest = transdet::rollCvMat(testImg2, -2, 0);
   motTest = transdet::rollCvMat(motTest, -2, 1);
-  cv::Point motion = transdet::globalEdgeMotion(testImg, motTest, 6);
+  Point motion = transdet::globalEdgeMotion(testImg, motTest, 6);
 
   if (motion.x == 2 && motion.y == 2) {
     cout << "[SUCCESS] globalEdgeMotion" << endl;
@@ -372,11 +440,33 @@ int main()
     cout << "motion: [" << motion.x << ", " << motion.y << "]\n";
   }
 
-  // //------------------------------------------------------------------------------------
-  // cout << "Testing sceneDetEdges" << endl;
+  //------------------------------------------------------------------------------------
 
-  // //------------------------------------------------------------------------------------
-  // cout << "Testing sceneDetColors" << endl;
+  transdet::FrameBuffer fBuff(2);
+  fBuff.add(testImg);
+  fBuff.add(motTest);
+
+  bool fll = fBuff.full();
+  int len = fBuff.length();
+
+  if (fll && len == 2) {
+    cout << "[SUCCESS] FrameBuffer" << endl;
+  } else {
+    cout << "[FAILED] FrameBuffer" << endl;
+    cout << "len: " << len << endl;
+  }
+
+  Mat mt1, mt2, mt1r, mt2r;
+  mt1 = cv::imread("../testims/mt1.jpg");
+  mt2 = cv::imread("../testims/mt2.jpg");
+  Size dnsz(100, 100);
+  cv::resize(mt1, mt1r, dnsz);
+  cv::resize(mt2, mt2r, dnsz);
+
+  double d = transdet::_frameDiffEdge(mt1r, mt2r, 6, 6);
+  cout << "d: " << d <<endl;
+
+  //------------------------------------------------------------------------------------
 
   return 0;
 }
