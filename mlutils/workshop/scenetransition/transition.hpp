@@ -15,7 +15,7 @@ namespace transdet
   /*
    * Container for frames for difference streaming
    */
-   class FrameBuffer
+  class FrameBuffer
    {
    private:
      int bufferSize;
@@ -61,6 +61,33 @@ namespace transdet
        return currentLen == bufferSize;
      }
    };
+
+  /*
+   * Scene detection class
+   * NOTE implemented in cpp file
+   */
+  class SceneDetection
+  {
+  private:
+    int imageHeight;
+    int imageWidth;
+
+  public:
+    SceneDetection(const int& const int&);
+
+    std::vector<int> vote(const vector<int>&,
+                          const vector<int>&)
+
+    std::vector<int> predict(const std::vector<cv::Mat>&,
+                             const float&,
+                             const int&);
+
+    std::vector<int> predict(const std::string&,
+                             const float&,
+                             const int&,
+                             const int&,
+                             const int&);
+  };
 
   //------------------------------------------------------------------------------------
 

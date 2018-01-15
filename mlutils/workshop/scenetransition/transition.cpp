@@ -11,6 +11,7 @@ using namespace std;
 namespace transdet
 {
 
+  //------------------------------------------------------------------------------------
   // HELPERS
   //------------------------------------------------------------------------------------
 
@@ -296,7 +297,9 @@ namespace transdet
 
   std::vector<int> sceneDetEdges(const std::string &vidPath,
                                  const float &threshold,
-                                 const int &minSceneLen)
+                                 const int &minSceneLen,
+                                 const int &imageHeight,
+                                 const int &imageWidth)
   {
     const int motionIter = 6;
     const int diffRadius = 6;
@@ -309,12 +312,16 @@ namespace transdet
 
     std::vector<int> detectedScene = {0};
     FrameBuffer frameBuffer(2);
+    Size sampleSize(imageWidth, imageHeight);
+
     int i = 0;
     for (;;)
       {
         Mat frame;
         cap >> frame;
         if (frame.empty()) { break; }
+
+        cv::resize(frame, frame, sampleSize);
 
         frameBuffer.add(frame);
 
@@ -335,6 +342,52 @@ namespace transdet
     cap.release();
 
     return detectedScene;
+  }
+
+  //------------------------------------------------------------------------------------
+
+  // MAIN CLASS IMPLEMENTATIONS
+  //------------------------------------------------------------------------------------
+  // SceneDetection implementation
+  SceneDetection::SceneDetection(const int &_imgHeight, const int &_imgWidth)
+  {
+    imageHeight = _imgHeight;
+    imageWidth = _imgWidth;
+  }
+
+  std::vector<int> SceneDetection::predict(const std::vector<cv::Mat> &vidArray,
+                                           const float &cannyThreshold,
+                                           const int & minSceneLen)
+  {
+    // check input size
+    if (vidArray[0].cols != imageWidth || vidArray[0].rows != imageHeight) {
+      string errStr =  "[ERROR] video array does not match object height and size\n";
+      throw std::length_error(errStr);
+    }
+
+    // Canny detections
+    std::vector<int> cannyDets = sceneDetEdges(vidArray, cannyThreshold, minSceneLen);
+
+    // Color detections
+
+    return cannyDets;
+  }
+
+  std::vector<int> SceneDetection::predict(const std::string &vidPath,
+                                           const float &cannyThreshold,
+                                           const int & minSceneLen)
+  {
+
+    // Canny detections
+    std::vector<int> cannyDets = sceneDetEdges(vidPath,
+                                               cannyThreshold,
+                                               minSceneLen,
+                                               imageHeight,
+                                               imageWidth);
+
+    // Color detections
+
+    return cannyDets;
   }
 
   //------------------------------------------------------------------------------------
