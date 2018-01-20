@@ -8,6 +8,89 @@
 
 namespace transdet
 {
+  // CLASSES
+
+  //------------------------------------------------------------------------------------
+
+  /*
+   * Container for frames for difference streaming
+   */
+  class FrameBuffer
+   {
+   private:
+     int bufferSize;
+     int currentLen = 0;
+
+   public:
+     std::vector<cv::Mat> frames;
+
+     // Constructor
+     FrameBuffer(int _buffSz)
+     {
+       bufferSize = _buffSz;
+     }
+
+     // add a frame to buffer
+     void add(cv::Mat inFrame)
+     {
+       if (currentLen < bufferSize) {
+         frames.push_back(inFrame);
+       }else if (currentLen > bufferSize) {
+         throw std::out_of_range("FrameBuffer overflowed somehow");
+       } else {
+         remove();
+         frames.push_back(inFrame);
+       }
+       currentLen++;
+     }
+
+     // remove first element added
+     void remove()
+     {
+       frames.erase(frames.begin());
+       currentLen--;
+     }
+
+     int length()
+     {
+       return currentLen;
+     }
+
+     bool full()
+     {
+       return currentLen == bufferSize;
+     }
+   };
+
+  /*
+   * Scene detection class
+   * NOTE implemented in cpp file
+   */
+  class SceneDetection
+  {
+  private:
+    int imageHeight;
+    int imageWidth;
+
+  public:
+    SceneDetection(const int& const int&);
+
+    std::vector<int> vote(const vector<int>&,
+                          const vector<int>&)
+
+    std::vector<int> predict(const std::vector<cv::Mat>&,
+                             const float&,
+                             const int&);
+
+    std::vector<int> predict(const std::string&,
+                             const float&,
+                             const int&,
+                             const int&,
+                             const int&);
+  };
+
+  //------------------------------------------------------------------------------------
+
   // FUNCTION SIGNATURES
   // HELPERS
   //------------------------------------------------------------------------------------
@@ -15,15 +98,15 @@ namespace transdet
   /*
    * Roll an OpenCV matrix over by axis
    *
-   * TODO move this into a more global utilities header
-   * @param &src an opencv image matrix
-   * @param &dst an opencv image matrix
+   * TODO figure out how to re-write the header instead of making copies
+   * @param &a an opencv image matrix
    * @param &shift the amount of pixels to shift by
    * @param &axis the axis in which to perform shift (0 (vert) or 1 (horiz))
    */
-  void rollCvMat(cv::Mat &dst,
-                 const int &shift,
-                 const int &axis);
+  cv::Mat rollCvMat(const cv::Mat &a,
+                    const int &shift,
+                    const int &axis);
+
   //------------------------------------------------------------------------------------
 
   /*
@@ -83,22 +166,36 @@ namespace transdet
    * @returns the hamming distance
    */
   double _hammingDist(const cv::Mat &binImg1,
-                      const cv::Mat &binImg2,
-                      const int &xShift,
-                      const int &yShift);
+                      const cv::Mat &binImg2);
 
   //------------------------------------------------------------------------------------
 
   /*
    * Compute the Hausdorff image between 2 binary images
    *
-   * @param &binImg1 a binary image
-   * @param &binImg2 a binary image
+   * @param &binImg1 a binary image const
+   * @param &binImg2 a binary image const
    * @param &xShift the radius shift in the x direction
    * @param &yShift the radius shift in the y direction
    * @returns the hamming distance
    */
   double _hausdorffDist(cv::Mat &binImg1, cv::Mat &binImg2, int &xShift, int &yShift);
+
+  //------------------------------------------------------------------------------------
+
+  /*
+   * Use canny edge detector to determine a metric of difference between 2 frames
+   *
+   * @param &currentImage const
+   * @param &nextImage const
+   * @param &threshold const
+   * @param &minSceneLen const
+   * @returns a distance metric between frames
+   */
+  double _frameDiffEdge(const cv::Mat &currentImage,
+                        const cv::Mat &nextImage,
+                        const int &motionIter,
+                        const int &diffRadius);
 
   //------------------------------------------------------------------------------------
 
@@ -136,6 +233,21 @@ namespace transdet
 
   //------------------------------------------------------------------------------------
 
+  /*
+  * Detects scene transitions using edge deviation of a Canny transformed image
+  * algorithm taken from Mai et al 1995 overridden from above to stream frames
+  * without keeping everything in memory
+  *
+  * @param &vidPath path to a video file
+  * @param &threshold percent difference threshold
+  * @param &min_scene_len estimate on the minimum scene length
+  * @returns a list of frames that are the beginning of given scenes
+  */
+  std::vector<int> sceneDetEdges(const std::string &vidPath,
+                                 const float &threshold,
+                                 const int &minSceneLen);
+
+  //------------------------------------------------------------------------------------
   /*
    * Detects scene transitions using difference in color histograms
    *
