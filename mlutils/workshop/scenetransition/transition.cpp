@@ -301,9 +301,10 @@ namespace transdet
                                  const int &imageHeight,
                                  const int &imageWidth)
   {
+    // clear the vector buffer
+
     const int motionIter = 6;
     const int diffRadius = 6;
-    int p;
 
     cv::VideoCapture cap(vidPath);
     if (!cap.isOpened()) {
@@ -321,12 +322,13 @@ namespace transdet
         cap >> frame;
         if (frame.empty()) { break; }
 
+        // Downsample image
         cv::resize(frame, frame, sampleSize);
 
         frameBuffer.add(frame);
 
         if (frameBuffer.full()) {
-          p = _frameDiffEdge(frameBuffer.frames[0],
+          double p = _frameDiffEdge(frameBuffer.frames[0],
                              frameBuffer.frames[1],
                              motionIter,
                              diffRadius);
@@ -355,6 +357,16 @@ namespace transdet
     imageWidth = _imgWidth;
   }
 
+  std::vector<float> SceneDetection::getCannyVec() const
+  {
+    return cannyVectorBuffer;
+  }
+
+  std::vector<float> SceneDetection::getColorVec() const
+  {
+    return colorVectorBuffer;
+  }
+
   std::vector<int> SceneDetection::predict(const std::vector<cv::Mat> &vidArray,
                                            const float &cannyThreshold,
                                            const int & minSceneLen)
@@ -375,19 +387,61 @@ namespace transdet
 
   std::vector<int> SceneDetection::predict(const std::string &vidPath,
                                            const float &cannyThreshold,
-                                           const int & minSceneLen)
+                                           const int &minSceneLen)
   {
+    // TODO ugly but more efficient to do all types of detections in the same loop
+    // clear the vector buffer
+    cannyVectorBuffer.clear();
 
-    // Canny detections
-    std::vector<int> cannyDets = sceneDetEdges(vidPath,
-                                               cannyThreshold,
-                                               minSceneLen,
-                                               imageHeight,
-                                               imageWidth);
+    // Default the motion iter
+    // TODO maybe make this tunable
+    const int motionIter = 6;
+    const int diffRadius = 6;
 
-    // Color detections
+    // Open video for reading
+    cout << "[INFO] Opening video for reading" << endl;
+    cv::VideoCapture cap(vidPath);
+    if (!cap.isOpened()) {
+      throw std::runtime_error("[ERROR] unable to open video");
+    }
 
-    return cannyDets;
+    // Initialize containers and downsampling stuff
+    std::vector<int> detectedScene = {0};
+    FrameBuffer frameBuffer(2);
+    Size sampleSize(imageWidth, imageHeight);
+
+    // Iterate through frames
+    int i = 0;
+    for (;;)
+      {
+        Mat frame;
+        cap >> frame;
+        if (frame.empty()) { break; }
+
+        // Downsample image
+        cv::resize(frame, frame, sampleSize);
+
+        frameBuffer.add(frame);
+
+        if (frameBuffer.full()) {
+          double p = _frameDiffEdge(frameBuffer.frames[0],
+                                    frameBuffer.frames[1],
+                                    motionIter,
+                                    diffRadius);
+
+          cannyVectorBuffer.push_back(p);
+
+          bool lessThanThresh = p > cannyThreshold;
+          bool sceneLenOK = (i - detectedScene[detectedScene.size()-1]) > minSceneLen;
+          bool isTransition = lessThanThresh && sceneLenOK;
+
+          if (isTransition) { detectedScene.push_back(i); }
+        }
+        i++;
+      }
+    cap.release();
+
+    return detectedScene;
   }
 
   //------------------------------------------------------------------------------------
@@ -518,6 +572,30 @@ int main()
 
   double d = transdet::_frameDiffEdge(mt1r, mt2r, 6, 6);
   cout << "d: " << d <<endl;
+
+  //------------------------------------------------------------------------------------
+
+  // Test video
+  string vidPath = "/Users/mike/Desktop/test.mp4";
+
+  // Initialize scene detector
+  transdet::SceneDetection detector(100, 100);
+
+  auto transitions = detector.predict(vidPath, 0.9, 2);
+
+  cout << "<";
+  for (auto && i : transitions)
+    {
+      cout << " " << i << " ";
+    }
+  cout << ">" << endl;
+
+  cout << "<";
+  for (auto && i : detector.getCannyVec())
+    {
+      cout << " " << i << " ";
+    }
+  cout << ">" << endl;
 
   //------------------------------------------------------------------------------------
 

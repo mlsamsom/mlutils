@@ -64,19 +64,26 @@ namespace transdet
 
   /*
    * Scene detection class
-   * NOTE implemented in cpp file
    */
   class SceneDetection
   {
   private:
+    // Variables
     int imageHeight;
     int imageWidth;
+    std::vector<float> cannyVectorBuffer;
+    std::vector<float> colorVectorBuffer;
 
   public:
-    SceneDetection(const int& const int&);
+    // Methods
+    SceneDetection(const int&, const int&);
 
-    std::vector<int> vote(const vector<int>&,
-                          const vector<int>&)
+    std::vector<float> getCannyVec() const;
+
+    std::vector<float> getColorVec() const;
+
+    std::vector<int> vote(const std::vector<int>&,
+                          const std::vector<int>&);
 
     std::vector<int> predict(const std::vector<cv::Mat>&,
                              const float&,
@@ -84,8 +91,6 @@ namespace transdet
 
     std::vector<int> predict(const std::string&,
                              const float&,
-                             const int&,
-                             const int&,
                              const int&);
   };
 
