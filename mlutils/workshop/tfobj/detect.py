@@ -13,32 +13,7 @@ from io import StringIO
 from matplotlib import pyplot as plt
 from PIL import Image
 
-# sys.path.append('/home/mike/git_repos/models/research')
-
 from utils import label_map_util
-
-MODEL_NAME = 'ssd_mobilenet_v1_coco_2017_11_17'
-MODEL_FILE = MODEL_NAME + '.tar.gz'
-DOWNLOAD_BASE = 'http://download.tensorflow.org/models/object_detection/'
-
-# Path to frozen detection graph. This is the actual model that is used for the object detection.
-PATH_TO_CKPT = MODEL_NAME + '/frozen_inference_graph.pb'
-
-# List of the strings that is used to add correct label for each box.
-PATH_TO_LABELS = os.path.join('data', 'mscoco_label_map.pbtxt')
-
-NUM_CLASSES = 90
-
-
-def maybe_download():
-    if not os.path.exists(MODEL_NAME):
-        opener = urllib.request.URLopener()
-        opener.retrieve(DOWNLOAD_BASE + MODEL_FILE, MODEL_FILE)
-        tar_file = tarfile.open(MODEL_FILE)
-        for file in tar_file.getmembers():
-            file_name = os.path.basename(file.name)
-            if 'frozen_inference_graph.pb' in file_name:
-                tar_file.extract(file, os.getcwd())
 
 
 class Detector(object):
@@ -123,9 +98,26 @@ class Detector(object):
 
 
 if __name__ == '__main__':
-    maybe_download()
-    test_image = imread('test.jpg')
-    detector = Detector(MODEL_NAME, PATH_TO_LABELS, NUM_CLASSES)
+    """
+    mAP on coco dataset
+    ssd mobilnet is fastest (30ms, mAP 21)
+    ssd_inception is fast (42ms, mAP 24)
+    frcnn resnet101 is twice as slow but accurate (106ms, mAP 32)
+    frcnn inception resnet atrous is most accurate but very slow (620ms, 37mAP)
+
+    coco dataset has 90, open image has 543
+    """
+
+    test_image = imread('/home/mike/Documents/tf_obj/test.jpg')
+
+    modelPath = 'trained_networks/ssd_inception_v2_coco_2017_11_17'
+    # modelPath = 'trained_networks/faster_rcnn_resnet101_coco_2017_11_08'
+    # modelPath = 'trained_networks/faster_rcnn_inception_resnet_v2_atrous_coco_2017_11_08'
+    # modelPath = 'trained_networks/ssd_mobilenet_v1_coco_2017_11_17'
+    cocoLabels = 'data/mscoco_label_map.pbtxt'
+    cocoClasses = 90
+
+    detector = Detector(modelPath, cocoLabels, cocoClasses)
     dets = detector.predict(test_image)
     print(dets)
 
