@@ -113,4 +113,5 @@ class SimpleRNN(object):
 
     def close(self):
         self.sess.close()
+        self.writer.close()
         tf.reset_default_graph()
