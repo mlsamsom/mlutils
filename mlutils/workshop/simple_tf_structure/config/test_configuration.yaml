@@ -1,0 +1,9 @@
+num_inputs: 1
+num_time_steps: 30
+num_neurons: 100
+num_outputs: 1
+result_dir: './results'
+device: "default"
+learning_rate: 0.001
+epochs: 2000
+batch_size: 1
