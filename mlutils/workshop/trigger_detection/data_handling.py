@@ -17,7 +17,10 @@ if not os.path.exists(train_dir):
 
 act, neg, bkgrd = load_raw_audio(dat_dir)
 
-nm = os.path.join(train_dir, "train_{}.wav".format(0))
-x, y = create_training_example(bkgrd[0], act, neg, nm, Ty, show=True)
-print(x.shape)
-print(y.shape)
+xs = []
+ys = []
+for i, b in enumerate(bkgrd):
+    nm = os.path.join(train_dir, "train_{}.wav".format(i))
+    x, y = create_training_example(bkgrd[0], act, neg, nm, Ty, show=True)
+    xs.append(x)
+    ys.append(y)
