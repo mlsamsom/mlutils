@@ -1,4 +1,5 @@
 import os
+import numpy as np
 from scipy import signal
 from scipy.io import wavfile
 from pydub import AudioSegment
@@ -21,14 +22,14 @@ def preprocess_audio(filename, duration=10000, frame_rate=44100):
     segment = AudioSegment.from_wav(filename)[:duration]
     segment = padding.overlay(segment)
 
-    # Set frame rate
+    # Set frame rate to 44100
     segment = segment.set_frame_rate(frame_rate)
 
     # Export as wav
     segment.export(filename, format='wav')
 
 
-def create_training_example(background, activates, negatives):
+def create_training_example(background, activates, negatives, output_name, Ty, show=False):
     """Create training samples
 
     Creates a training example with a given background, activates, and negatives.
@@ -37,6 +38,7 @@ def create_training_example(background, activates, negatives):
         background (ndarray): a 10 second background audio recording
         activates (ndarray): a list of audio segments of the word "activate"
         negatives (ndarray): a list of audio segments of random words that are not "activate"
+        output_name (str): name to save training example
 
     Returns:
         x (ndarray): the spectrogram of the training example
@@ -49,56 +51,44 @@ def create_training_example(background, activates, negatives):
     # Make background quieter
     background = background - 20
 
-    ### START CODE HERE ###
-    # Step 1: Initialize y (label vector) of zeros (≈ 1 line)
     y = np.zeros((1, Ty))
 
-    # Step 2: Initialize segment times as empty list (≈ 1 line)
     previous_segments = []
-    ### END CODE HERE ###
 
-    # Select 0-4 random "activate" audio clips from the entire list of "activates" recordings
     number_of_activates = np.random.randint(0, 5)
     random_indices = np.random.randint(len(activates), size=number_of_activates)
     random_activates = [activates[i] for i in random_indices]
 
-    ### START CODE HERE ### (≈ 3 lines)
-    # Step 3: Loop over randomly selected "activate" clips and insert in background
     for random_activate in random_activates:
         # Insert the audio clip on the background
         background, segment_time = insert_audio_clip(background, random_activate, previous_segments)
         # Retrieve segment_start and segment_end from segment_time
         segment_start, segment_end = segment_time
         # Insert labels in "y"
-        y = insert_ones(y, segment_end)
-    ### END CODE HERE ###
+        y = insert_ones(y, segment_end, Ty)
 
     # Select 0-2 random negatives audio recordings from the entire list of "negatives" recordings
     number_of_negatives = np.random.randint(0, 3)
     random_indices = np.random.randint(len(negatives), size=number_of_negatives)
     random_negatives = [negatives[i] for i in random_indices]
 
-    ### START CODE HERE ### (≈ 2 lines)
-    # Step 4: Loop over randomly selected negative clips and insert in background
     for random_negative in random_negatives:
         # Insert the audio clip on the background
         background, _ = insert_audio_clip(background, random_negative, previous_segments)
-    ### END CODE HERE ###
 
     # Standardize the volume of the audio clip
     background = match_target_amplitude(background, -20.0)
 
     # Export new training example
-    file_handle = background.export("train" + ".wav", format="wav")
-    print("File (train.wav) was saved in your directory.")
+    file_handle = background.export(output_name, format="wav")
 
     # Get and plot spectrogram of the new recording (background with superposition of positive and negatives)
-    x = graph_spectrogram("train.wav")
+    x = graph_spectrogram(output_name, show=show)
 
     return x, y
 
 
-def insert_ones(y, segment_end_ms, steps=50, background_len=10000.0):
+def insert_ones(y, segment_end_ms, Ty, steps=50, background_len=10000.0):
     """Update the label vector y
 
     The labels of the output steps strictly after the end of the segment

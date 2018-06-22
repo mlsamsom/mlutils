@@ -1,6 +1,11 @@
-import tensorflow as tf
 from utils import graph_spectrogram
+from model import GRUModel
+
+
+Tx = 5511
+Ty = 1375
+n_freq = 101
 
 
 if __name__ == "__main__":
-    x = graph_spectrogram('audio_examples/example_train.wav', show=True)
+    m = GRUModel("./config.yaml")

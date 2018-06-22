@@ -1,16 +1,24 @@
 from keras.callbacks import ModelCheckpoint
 from keras.models import Model, load_model, Sequential
-from keras.layers import Dense, Activation, Dropout, Input, Masking, TimeDistributed, LSTM, Conv1D
+from keras.layers import Dense, Activation, Dropout, Input, Masking
+from keras.layers import TimeDistributed, LSTM, Conv1D
 from keras.layers import GRU, Bidirectional, BatchNormalization, Reshape
 from keras.optimizers import Adam
+from datetime import datetime
+import yaml
+import os
 
 
 class GRUModel(object):
     """Simple 2 layer GRU Model
     """
     def __init__(self, config):
+        config = os.path.abspath(config)
         # unpack config
-        pass
+        with open(config, "r") as f:
+            config_dict = yaml.load(f)
+        self._result_dir = os.path.abspath(config_dict["result_dir"])
+        self._init()
 
     def define_model(self):
         """Define word detection model
@@ -53,8 +61,32 @@ class GRUModel(object):
         self._model.fit(X, y, batch_size=batch_size, epochs=epochs)
         self.save()
 
+    def eval(self, X, y):
+        """Run evaluation
+        """
+        return self._model.evaluate(X, y)
+
     def _init(self):
-        pass
+        """Initialize model
+        """
+        if not os.path.exists(self._result_dir):
+            print("No saved models in {}".format(self._result_dir))
+            os.mkdir(self._result_dir)
+            return
+
+        modelnames = os.listdir(self._result_dir)
+        modelnames = [x for x in modelnames if x.endswith('.hdf5')]
+        if len(modelnames) == 0:
+            print("No saved models in {}".format(self._result_dir))
+            return
+
+        modelnames.sort(reverse=True)
+        model_file = os.path.join(self._result_dir, modelnames[0])
+        self._model.load_weights(model_file)
 
     def save(self):
-        pass
+        """Save the model
+        """
+        nm = datetime.now().strftime("%Y-%m-%d_GRUModel.hdf5")
+        sv = os.path.join(self._result_dir, nm)
+        self._model.save_weights(sv)

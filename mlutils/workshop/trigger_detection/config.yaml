@@ -1,0 +1,3 @@
+result_dir: "./results"
+data_dir: "./raw_data"
+train_dir: "./train_dir"
