@@ -86,11 +86,18 @@ namespace transdet
     dilate(canny2, e_2, dilation_elem, cv::Point(-1, -1), numIter);
 
     // calculate percent differences
-    Mat tmpand;
-    cv::bitwise_and(e_1, e_2, tmpand);
-    percent_diff = cv::sum(tmpand)[0] / cv::sum(e_1)[0];
+    // Mat tmpand;
+    // cv::bitwise_and(e_1, e_2, tmpand);
+    // percent_diff = cv::sum(tmpand)[0] / (cv::sum(e_1)[0] + 1);
 
-    return 1.0 - percent_diff;
+    Mat tmpxor;
+    cv::bitwise_xor(e_1, e_2, tmpxor);
+    cout << "xor diff " << cv::sum(tmpxor)[0] << endl;;
+    cout << "image_size " << (tmpxor.rows*tmpxor.cols) << endl;
+    percent_diff = cv::sum(tmpxor)[0] / (tmpxor.rows*tmpxor.cols);
+    return percent_diff;
+
+    // return 1.0 - percent_diff;
   }
 
   //------------------------------------------------------------------------------------
@@ -576,12 +583,13 @@ int main()
   //------------------------------------------------------------------------------------
 
   // Test video
-  string vidPath = "/Users/mike/Desktop/test.mp4";
+  // string vidPath = "/Users/mike/Desktop/test.mp4";
+  string vidPath = "/home/mike/Desktop/test.mp4";
 
   // Initialize scene detector
   transdet::SceneDetection detector(100, 100);
 
-  auto transitions = detector.predict(vidPath, 0.9, 2);
+  auto transitions = detector.predict(vidPath, 0.4, 2);
 
   cout << "<";
   for (auto && i : transitions)
